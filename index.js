@@ -93,15 +93,43 @@ class UnderMine {
    */
   async setup(discovery)
   {
-	//patcher
+	//check vortex patch consent
+	let patchBackupPath = path.join(discovery.path, 'UnderMine_Data', 'Managed', 'UnderMine.dll_vortex_assembly_backup');
+    if (await this.getPathExistsAsync(patchBackupPath))
+	{
+	  //we already have consent as the game has already been patched in the past
+	  checkUnderModStatus(discovery);
+	  return;
+	} else {
+	  //we do not have consent. prompt the user
+	  var context = this.context;
+      return new Promise((resolve, reject) => {
+        context.api.store.dispatch(
+          actions.showDialog(
+            'question',
+            'Patch Game Files to Enable Mods?',
+            { text: 'For UnderMine to support mods (including the modding API, UnderMod itself), Vortex needs to patch some game files. Vortex will maintain this patch for you automatically if the game is updated or otherwise modified, each time you manage the game in Vortex.  Would you like to continue?' },
+            [
+              { label: 'Cancel', action: () => reject(new util.UserCanceled()) },
+              { label: 'Enable Mods', action: () => { this.checkUnderModStatus(discovery); } }
+            ]
+          )
+        );
+      });
+	}
+  }
+  
+  async checkUnderModStatus(discovery)
+  {
+    //run patcher now that we have consent
 	const absPath = path.join(discovery.path, HOOK_ASSEMBLY);
 	runPatcher(__dirname, absPath, HOOK_ENTRYPOINT, false);
-	  
+	
 	//skip if UnderMod is found
-    let undermodPath = path.join(discovery.path, 'UnderMine_Data', 'Managed', 'UnderMod.dll');
+    let undermodPath = path.join(discovery.path, 'UnderMine_Data', 'Managed', 'VortexMods', 'UnderMod', 'UnderMod.dll');
     if (await this.getPathExistsAsync(undermodPath)) return;
 	
-	//show 'needs UnderMod' prompt
+	//show UnderMod prompt
 	let umUrl = 'https://www.nexusmods.com/undermine/mods/1';
     var context = this.context;
     return new Promise((resolve, reject) => {
@@ -109,10 +137,11 @@ class UnderMine {
         actions.showDialog(
           'question',
           'Action required',
-          { text: 'You must install UnderMod to use mods with UnderMine.' },
+          { text: 'Most UnderMine mods require UnderMod (an modding API for UnderMine) to run. Vortex can install UnderMod for you.' },
           [
-            { label: 'Cancel', action: () => reject(new util.UserCanceled()) },
-            { label: 'Goto UnderMod on NexusMods', action: () => { util.opn(umUrl).catch(err => undefined); reject(new util.UserCanceled()); } }
+            { label: 'I Do Not Want To Install UnderMod', action: null },
+            { label: 'Remind Me Later', action: null },
+            { label: 'Get UnderMod', action: () => { util.opn(umUrl).catch(err => undefined); } }
           ]
         )
       );
