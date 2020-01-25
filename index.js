@@ -30,9 +30,11 @@ class UnderMine {
     this.logo = 'gameart.png';
     this.requiredFiles = ['UnderMine.exe', 'UnderMine_Data/Managed/UnderMine.dll']
     this.details = { steamAppId: 656350 };
+	this.environment = { SteamAPPId: '656350' };
     this.mergeMods = true;
     this.requiresCleanup = true;
     this.shell = process.platform == 'win32';
+	this.launcher = 'steam';
 	
 	// custom properties
     this.defaultPaths = [
@@ -85,6 +87,47 @@ class UnderMine {
     return 'Mods';
   }
 
+  async checkUnderModStatus(discovery)
+  {
+    //run patcher now that we have consent
+	const absPath = path.join(discovery.path, HOOK_ASSEMBLY);
+	runPatcher(__dirname, absPath, HOOK_ENTRYPOINT, false);
+	
+	//skip if UnderMod is found
+    let undermodPath = path.join(discovery.path, 'UnderMine_Data', 'Managed', 'VortexMods', 'UnderMod', 'UnderMod.dll');
+    if (await this.getPathExistsAsync(undermodPath)) return;
+	
+	//skip if optout is found
+	let umOptFile = path.join(discovery.path, 'vortex-no-undermod-prompt.txt');
+	if (await this.getPathExistsAsync(umOptFile)) return;
+	
+	//show UnderMod prompt
+	let umUrl = 'https://www.nexusmods.com/undermine/mods/1';
+    var context = this.context;
+    return new Promise((resolve, reject) => {
+      context.api.store.dispatch(
+        actions.showDialog(
+          'question',
+          'Action required',
+          { text: 'Most UnderMine mods require UnderMod (an modding API for UnderMine) to run. Vortex can install UnderMod for you.' },
+          [
+            { label: 'I Do Not Want To Install UnderMod', action: () => { this.underModOptOut(umOptFile); resolve(); } },
+            { label: 'Remind Me Later', action: () => {resolve();}  },
+            { label: 'Get UnderMod', action: () => { util.opn(umUrl).catch(err => undefined); resolve();} }
+          ]
+        )
+      );
+    });
+  }
+  
+  async underModOptOut(f)
+  {
+	let txt = "Vortex created this file to store your preference regarding UnderMod.";
+	fs.writeFile(f, txt, (err) => {
+	  if (err) throw err;
+	});
+  }
+
   /**
    * Optional setup function. If this game requires some form of setup before it can be modded (like
    * creating a directory, changing a registry key, ...) do it here. It will be called every time
@@ -98,7 +141,7 @@ class UnderMine {
     if (await this.getPathExistsAsync(patchBackupPath))
 	{
 	  //we already have consent as the game has already been patched in the past
-	  checkUnderModStatus(discovery);
+	  await this.checkUnderModStatus(discovery);
 	  return;
 	} else {
 	  //we do not have consent. prompt the user
@@ -111,41 +154,12 @@ class UnderMine {
             { text: 'For UnderMine to support mods (including the modding API, UnderMod itself), Vortex needs to patch some game files. Vortex will maintain this patch for you automatically if the game is updated or otherwise modified, each time you manage the game in Vortex.  Would you like to continue?' },
             [
               { label: 'Cancel', action: () => reject(new util.UserCanceled()) },
-              { label: 'Enable Mods', action: () => { this.checkUnderModStatus(discovery); } }
+              { label: 'Enable Mods', action: () => {this.checkUnderModStatus(discovery); resolve(); } }
             ]
           )
         );
       });
 	}
-  }
-  
-  async checkUnderModStatus(discovery)
-  {
-    //run patcher now that we have consent
-	const absPath = path.join(discovery.path, HOOK_ASSEMBLY);
-	runPatcher(__dirname, absPath, HOOK_ENTRYPOINT, false);
-	
-	//skip if UnderMod is found
-    let undermodPath = path.join(discovery.path, 'UnderMine_Data', 'Managed', 'VortexMods', 'UnderMod', 'UnderMod.dll');
-    if (await this.getPathExistsAsync(undermodPath)) return;
-	
-	//show UnderMod prompt
-	let umUrl = 'https://www.nexusmods.com/undermine/mods/1';
-    var context = this.context;
-    return new Promise((resolve, reject) => {
-      context.api.store.dispatch(
-        actions.showDialog(
-          'question',
-          'Action required',
-          { text: 'Most UnderMine mods require UnderMod (an modding API for UnderMine) to run. Vortex can install UnderMod for you.' },
-          [
-            { label: 'I Do Not Want To Install UnderMod', action: null },
-            { label: 'Remind Me Later', action: null },
-            { label: 'Get UnderMod', action: () => { util.opn(umUrl).catch(err => undefined); } }
-          ]
-        )
-      );
-    });
   }
 
   async getPathExistsAsync(path)
