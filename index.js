@@ -23,7 +23,6 @@ class UnderMine {
    * @param {IExtensionContext} context -- The Vortex extension context.
    */
   constructor(context) {
-    // properties used by Vortex
     this.context = context;
     this.id = GAME_ID;
     this.name = 'UnderMine';
@@ -35,13 +34,6 @@ class UnderMine {
     this.requiresCleanup = true;
     this.shell = process.platform == 'win32';
 	this.launcher = 'steam';
-	
-	// custom properties
-    this.defaultPaths = [
-      process.env.HOME + '/.local/share/Steam/steamapps/common/UnderMine', //linux
-      process.env.HOME + '/Library/Application Support/Steam/steamapps/common/UnderMine/', //mac
-      'C:\\Program Files (x86)\\Steam\\steamapps\\common\\UnderMine' //windows
-    ];
   }
 
   /**
@@ -55,14 +47,7 @@ class UnderMine {
    * which is slow and only happens manually.
    */
   async queryPath() {
-    // check Steam
-    if (await util.steam.findByAppId('656350')) return game.gamePath;
-	// check default paths
-    for (let defaultPath of this.defaultPaths)
-    {
-      if (await this.getPathExistsAsync(defaultPath))
-        return defaultPath;
-    }
+	return util.steam.findByAppId('656350').then(game => game.gamePath);
   }
 
   /**
